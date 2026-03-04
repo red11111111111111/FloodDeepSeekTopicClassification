@@ -11,7 +11,7 @@ import torch
 import json
 
 
-# 1. 加载映射文件
+
 
 with open("/root/autodl-tmp/label_mapping.json", "r", encoding="utf-8") as f:
     label_mapping = json.load(f)
@@ -20,24 +20,22 @@ num_labels = len(id2label)
 print(" 加载标签映射:", id2label)
 
 
-# 2. 加载数据
+
 
 train_df = pd.read_csv("/root/autodl-tmp/data/train_data_numeric.csv")
-val_df = pd.read_csv("/root/autodl-tmp/data/val_data_numeric.csv")  # 保留用于 save_best_model
+val_df = pd.read_csv("/root/autodl-tmp/data/val_data_numeric.csv") 
 
 
-# 3. 转为 Hugging Face Dataset
 
 train_dataset = Dataset.from_pandas(train_df[['text', 'label']])
-val_dataset = Dataset.from_pandas(val_df[['text', 'label']])  # 用于选择最佳模型
+val_dataset = Dataset.from_pandas(val_df[['text', 'label']]) 
 
 
-# 4. 加载 Tokenizer
 
-model_path = "/root/autodl-tmp/DeepSeek-R1-Distill-Llama-8B"  # 或你的本地路径
+model_path = "/root/autodl-tmp/DeepSeek-R1-Distill-Llama-8B"
 tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
-# 设置 pad_token：DeepSeek
+
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.unk_token
 
@@ -56,12 +54,11 @@ print(" 正在 tokenize 数据...")
 train_dataset = train_dataset.map(tokenize_function, batched=True)
 val_dataset = val_dataset.map(tokenize_function, batched=True)
 
-# 设置 PyTorch 格式
+
 train_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'label'])
 val_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'label'])
 
 
-# 5. 加载模型 + LoRA
 
 model = AutoModelForSequenceClassification.from_pretrained(
     model_path,
@@ -75,7 +72,7 @@ model = AutoModelForSequenceClassification.from_pretrained(
 model.gradient_checkpointing_enable()
 model.config.pad_token_id = tokenizer.pad_token_id
 
-# LoRA 配置
+
 lora_config = LoraConfig(
     r=16,
     lora_alpha=16,
@@ -88,7 +85,6 @@ model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
 
-# 6. 训练参数（不评估，但用 val 选最佳模型）
 
 training_args = TrainingArguments(
     output_dir="./deepseek-classify-best",
@@ -103,7 +99,6 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="loss",
 
-    # 显存优化
     bf16=True,
     fp16=False,
     gradient_checkpointing=True,
@@ -121,14 +116,12 @@ training_args = TrainingArguments(
 
 
 
-# 8. 开始训练（使用 val 选模型，但不打印指标）
-
 trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=train_dataset,
-    eval_dataset=val_dataset,  #  传入 val，用于计算 loss 选模型
-    # compute_metrics 不传
+    eval_dataset=val_dataset, 
+    # compute_metrics 
 )
 
 print(" 开始训练...")
