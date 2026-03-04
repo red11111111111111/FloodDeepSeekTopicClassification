@@ -11,8 +11,6 @@ import torch
 import json
 
 
-# 1. 加载映射文件
-
 with open("/root/autodl-tmp/label_mapping.json", "r", encoding="utf-8") as f:
     label_mapping = json.load(f)
 id2label = {int(v): k for k, v in label_mapping.items()}
@@ -21,17 +19,12 @@ num_labels = len(id2label)
 print(" 加载标签映射:", id2label)
 
 
-# 2. 加载数据（数值化版本）
-
 train_df = pd.read_csv("/root/autodl-tmp/data/train_data_numeric.csv")
 val_df = pd.read_csv("/root/autodl-tmp/data/val_data_numeric.csv")
-
 
 train_dataset = Dataset.from_pandas(train_df[["text", "label"]])
 val_dataset = Dataset.from_pandas(val_df[["text", "label"]])
 
-
-# 3. 加载 Tokenizer
 
 model_path = "/root/autodl-tmp/Qwen/Qwen3-8B"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -52,8 +45,6 @@ print(" 正在 tokenize 数据...")
 train_dataset = train_dataset.map(tokenize_function, batched=True)
 val_dataset = val_dataset.map(tokenize_function, batched=True)
 
-# 4. 加载模型 + LoRA（使用 SequenceClassification）
-
 model = AutoModelForSequenceClassification.from_pretrained(
     model_path,
     num_labels=num_labels,
@@ -65,7 +56,6 @@ model = AutoModelForSequenceClassification.from_pretrained(
 
 model.config.pad_token_id = tokenizer.pad_token_id
 
-# LoRA 配置
 lora_config = LoraConfig(
     r=16,
     lora_alpha=16,
@@ -78,8 +68,6 @@ lora_config = LoraConfig(
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
-
-# 5. 训练参数
 
 training_args = TrainingArguments(
     output_dir="./qwen3-classify-best",
@@ -108,17 +96,12 @@ training_args = TrainingArguments(
 )
 
 
-# 6. 评估指标
-
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     predictions = predictions[0] if isinstance(predictions, tuple) else predictions
     pred_ids = predictions.argmax(axis=-1)
     accuracy = (pred_ids == labels).mean()
     return {"accuracy": accuracy}
-
-
-# 7. 开始训练
 
 trainer = Trainer(
     model=model,
@@ -129,16 +112,11 @@ trainer = Trainer(
     tokenizer=tokenizer,  # 自动处理 padding
 )
 
-print("🚀 开始训练...")
+print("开始训练...")
 trainer.train()
 
-
-# 8. 保存完整模型
-
-#  合并 LoRA 权重
 model = model.merge_and_unload()
 
-# 保存
 model.save_pretrained("./qwen3-classify-final")
 tokenizer.save_pretrained("./qwen3-classify-final")
 
