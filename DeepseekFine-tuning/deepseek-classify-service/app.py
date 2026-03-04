@@ -1,4 +1,3 @@
-# deepseek_classifier_api.py
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from peft import PeftModel
@@ -6,9 +5,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import json
 import logging
-
-
-# 配置路径（根据你的实际路径修改）
 
 lora_checkpoint = "/root/autodl-tmp/Deepseek_exp/deepseek-classify-best/checkpoint-13125"
 base_model_name = "/root/autodl-tmp/DeepSeek-R1-Distill-Llama-8B"
@@ -20,15 +16,10 @@ with open(label_mapping_path, "r", encoding="utf-8") as f:
 id2label = {int(v): k for k, v in label_mapping.items()}
 num_labels = len(id2label)
 
-
-# 加载 tokenizer 和模型（只加载一次）
-
-print(" 加载 tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained(base_model_name)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
-
-print(" 加载基础模型...")
+    
 base_model = AutoModelForSequenceClassification.from_pretrained(
     base_model_name,
     num_labels=num_labels,
@@ -39,13 +30,11 @@ base_model = AutoModelForSequenceClassification.from_pretrained(
 )
 base_model.config.pad_token_id = tokenizer.pad_token_id
 
-print(" 加载 LoRA 权重...")
 model = PeftModel.from_pretrained(base_model, lora_checkpoint)
 model = model.eval()
 
 
 
-# FastAPI 应用
 
 app = FastAPI(title="Deepseek Text Classifier", version="1.0")
 
@@ -55,12 +44,10 @@ class ClassifyRequest(BaseModel):
 @app.post("/classify")
 def classify(request: ClassifyRequest):
     try:
-        # 预处理
         text = request.text.strip()
         if not text:
             raise HTTPException(status_code=400, detail="文本不能为空")
-
-        # Tokenize
+            
         inputs = tokenizer(
             text,
             return_tensors="pt",
@@ -69,7 +56,6 @@ def classify(request: ClassifyRequest):
             max_length=512
         ).to(model.device)
 
-        # 推理
         with torch.no_grad():
             outputs = model(**inputs)
             logits = outputs.logits
